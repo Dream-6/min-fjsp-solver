@@ -18,7 +18,7 @@
 ## 项目进度
 
 - [x] 建仓，环境搭建（Python 3.12 / VS Code / Git）
-- [ ] 跑通 OR-Tools 官方 job-shop 示例
+- [x] 跑通 OR-Tools 官方 job-shop 示例
 - [ ] 贪心基线求解器
 - [ ] CP-SAT 求解器（JSP 版）
 - [ ] 升级为 FJSP（机器分配决策变量）
