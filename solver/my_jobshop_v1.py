@@ -1,16 +1,13 @@
-# https://developers.google.com/optimization/scheduling/job_shop
-# https://github.com/google/or-tools/tree/stable/examples/python
-
 import collections
 from ortools.sat.python import cp_model
 import matplotlib.pyplot as plt
 
-# 定义数据
 jobs_data = [
-    [(0, 3), (1, 2), (2, 2)],    # job0
-    [(0, 2), (2, 1), (1, 4)],     # job1
-    [(1, 4), (2, 3)]              # job2
+    [(0, 4), (1, 6), (2, 2)],    # job0
+    [(0, 2), (2, 4), (1, 4)],     # job1
+    [(1, 4), (2, 2), (0, 1)]              # job2
 ]
+
 machines_count = 1+ max(task[0] for job in jobs_data for task in job) #
 all_machines = range(machines_count)
 
@@ -20,54 +17,36 @@ horizon = sum(task[1] for job in jobs_data for task in job)
 # 建模
 model = cp_model.CpModel() 
 
-# 定义变量
+# 变量
 task_type = collections.namedtuple("task_type", "start end interval")
-assigned_task_type = collections.namedtuple(
-    "assigned_task_type", "start job index duration"
-)
-# print(task_type)
-# print(assigned_task_type)
+assigned_task_type = collections.namedtuple("assigend_task_type", "start job index duration")
 
-# 创建任务时间间隔，并添加给对应的机器
-all_tasks = {}
+# 任务分配的变量
+all_jobs = {}
 machine_to_intervals = collections.defaultdict(list)
 
 for job_id, job in enumerate(jobs_data):
     for task_id, task in enumerate(job):
         machine = task[0]
         duration = task[1]
-        suffix = "_%i_%i" % (job_id, task_id) 
-        start_var = model.NewIntVar(0, horizon, "start" + suffix) # 开始时间是整数
-        end_var = model.NewIntVar(0, horizon, "end" + suffix) # 结束时间也是整数
-        interval_var = model.NewIntervalVar(start_var, duration, end_var,
-                                            "interval" + suffix) # 区间变量：任务的开始时间，持续时间，结束时间
-        all_tasks[job_id, task_id] = task_type(
-            start=start_var, end=end_var, interval=interval_var
-        )
+        start_var = model.new_int_var(0 , horizon, f"start_{job_id}_{task_id}")
+        end_var = model.new_int_var(0 , horizon, f"end_{job_id}_{task_id}")
+        interval_var = model.new_interval_var(start_var, duration, end_var, f"interval_{job_id}_{task_id}")
+        all_jobs[job_id, task_id] = task_type(start=start_var, end=end_var, interval=interval_var)
         machine_to_intervals[machine].append(interval_var)
 
-
-# 定义约束
-# print(all_tasks)
-
-# (job_id, task_id)的持续时间，在同一台机器上时，不重叠
+# 约束条件
 for machine in all_machines:
     model.add_no_overlap(machine_to_intervals[machine])
 
-# 同1个job的多个task的时序约束
 for job_id, job in enumerate(jobs_data):
     for task_id in range(len(job) - 1):
-        model.add(
-            all_tasks[job_id, task_id + 1].start >= all_tasks[job_id, task_id].end
-        )
+        model.add(all_jobs[job_id, task_id + 1].start >= all_jobs[job_id, task_id].end)
 
 # 目标函数
-obj_var = model.new_int_var(0, horizon, "makespan")
-model.add_max_equality(
-    obj_var,
-    [all_tasks[job_id, len(job) - 1].end for job_id, job in enumerate(jobs_data)],
-) # obj_var >= max(所有job的最后一个task的结束时间)
-model.minimize(obj_var)
+ojb_var = model.new_int_var(0, horizon, "makespan")
+model.add_max_equality(ojb_var, [all_jobs[job_id, len(job) - 1].end for job_id, job in enumerate(jobs_data)])
+model.minimize(ojb_var)
 
 # 调用求解器
 # 日志参数必须在 solve() 之前设置（求解器启动时读取，求解完再设就来不及了）
@@ -85,7 +64,7 @@ if status == cp_model.OPTIMAL or status == cp_model.FEASIBLE:
             machine = task[0]
             assigned_jobs[machine].append(
                 assigned_task_type(
-                    start=solver.value(all_tasks[job_id, task_id].start),
+                    start=solver.value(all_jobs[job_id, task_id].start),
                     job=job_id,
                     index=task_id,
                     duration=task[1],
